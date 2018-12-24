@@ -56,13 +56,23 @@
 #include "gpio.h"
 
 /* USER CODE BEGIN Includes */
+
+// ToDo: make sure you have re-enabled optimization (for size was the original, but maybe try for speed?)
+
 #include "SFlash.h"
 #include "DOPP_SD.h"
+#include "DOPP_Boot.h"
+#include "print.h"
+#include "print_conf.h"
 
 // ToDo: Refactor SPIDS STM32F7 driver to use interrupt transfers and block operations until the hardware is done doing stuff.
 // You can do this with a simple lock variable that is set while the SD card is being accessed. Then it is un-set in the completion interrupt
 
 #include <string.h>
+#include <stdlib.h>	// Note: you need to use the full NewLib if you want floats. But we don't need or want that for the bootloader
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdio.h>
 
 /* USER CODE END Includes */
 
@@ -75,6 +85,7 @@ extern SFLASH_Handle_t hsflash;
 
 
 
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -83,10 +94,7 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 
-void debug(const char* msg)
-{
-	HAL_UART_Transmit(&huart4, (uint8_t*)msg, strlen(msg), 1000);
-}
+
 
 /* USER CODE END PFP */
 
@@ -122,27 +130,27 @@ int main(void)
   /* USER CODE END SysInit */
 
 	/* Initialize all configured peripherals */
-	MX_GPIO_Init();
-	MX_UART4_Init();
-	MX_SPI1_Init();
-	MX_SPI6_Init();
-	MX_QUADSPI_Init();
-	MX_USART1_UART_Init();
+//	MX_GPIO_Init();
+//	MX_UART4_Init();
+//	MX_SPI1_Init();
+//	MX_SPI6_Init();
+//	MX_QUADSPI_Init();
+//	MX_USART1_UART_Init();
 //	MX_USB_DEVICE_Init();
 	/* USER CODE BEGIN 2 */
 
-	HAL_UART_MspInit(&huart4);
 
-	// Setup flash memory
-	hsflash.prevUnit = 0;
-	hsflash.unit = 1; 							// Doing this should force a "setUnit" call
-	hsflash.user = SFLASH_STM32F7_QSPI_Intfc;		// Link in the interface
-//  	  hsflash.cmd = 								// Don't set this up manually
-	hsflash.configured = true;
 
-	// Set up the SD card
-  	DOPP_Begin_SD();
 
+  /* To Minimize Peripheral Configuration/Deconfig we will configure peripherals as we need them */
+  firstInit(); // Inits GPIO and UART4
+
+  PRINT_Stat_e stat;
+  UNUSED(stat); // Prevent warning if we happen to not use this variable
+
+  stat = debug_link();	// User calls this directly to link up the debug print configuration
+
+  stat = mprintf(&debugIntfc, "Welcome to the Doppler bootloader. Here's a formatted number: 0x% 2X. Enjoy!\n", 0xAB);
 
 
   /* USER CODE END 2 */
@@ -150,11 +158,13 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-  	debug("Reached the main loop");
+  	mprint(&debugIntfc, "Jumping to application\n");
+  	uint32_t count = 0;
   	while (1)
   	{
-  		debug("looping...\n");
-  		HAL_Delay(1000);
+
+  		mprintf(&debugIntfc, "Pretend application looping, count = 0x%+4X\n", count++);
+  		HAL_Delay(100);
 
   		/* USER CODE END WHILE */
 
@@ -315,6 +325,17 @@ void assert_failed(uint8_t* file, uint32_t line)
 /* Code Boneyard */
 
 /*
+
+	// Setup flash memory
+	hsflash.prevUnit = 0;
+	hsflash.unit = 1; 							// Doing this should force a "setUnit" call
+	hsflash.user = SFLASH_STM32F7_QSPI_Intfc;		// Link in the interface
+//  	  hsflash.cmd = 								// Don't set this up manually
+	hsflash.configured = true;
+
+	// Set up the SD card
+  	DOPP_Begin_SD();
+
 
 // Flash Test Code
 //	uint8_t mandevid[2];
